@@ -257,7 +257,7 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
 
       paging_options = Keyword.get(options, :paging_options, @default_paging_options)
 
-      address_id = AddressIdToAddressHash.hash_to_id(address_hash)
+      address_id = AddressIdToAddressHash.hash_to_id(address_hash, options)
 
       block_number_from_paging_options =
         case paging_options do
@@ -291,7 +291,7 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
       index_internal_transaction_desc_order = Keyword.get(options, :index_internal_transaction_desc_order, true)
 
       address_id
-      |> do_fetch_for_address(max_block_number, from_block, paging_options.page_size, sum_mode, sort_direction)
+      |> do_fetch_for_address(max_block_number, from_block, paging_options.page_size, sum_mode, sort_direction, options)
       |> Enum.map(&serialize/1)
       |> filter_by_address(address_hash, direction)
       |> different_from_parent_transaction()
@@ -301,21 +301,22 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
       |> Enum.sort_by(&{&1.block_number, &1.transaction_index, &1.index}, sort_func)
       |> Enum.take(paging_options.page_size)
       |> join_associations(necessity_by_association)
-      |> Repo.preload(:block)
-      |> InternalTransaction.preload_error()
+      |> Chain.select_repo(options).preload(:block)
+      |> InternalTransaction.preload_error(options)
       |> InternalTransaction.preload_transaction()
     end
   end
 
-  defp do_fetch_for_address(address_id, to_block, from_block, limit, sum_mode, sort_direction, acc \\ [])
+  defp do_fetch_for_address(address_id, to_block, from_block, limit, sum_mode, sort_direction, options, acc \\ [])
 
-  defp do_fetch_for_address(_, to_block, from_block, _, _, _, acc)
-       when is_integer(from_block) and is_integer(to_block) and from_block >= to_block, do: acc
+  defp do_fetch_for_address(_, to_block, from_block, _, _, _, _options, acc)
+       when is_integer(from_block) and is_integer(to_block) and from_block >= to_block,
+       do: acc
 
-  defp do_fetch_for_address(address_id, to_block, from_block, limit, sum_mode, sort_direction, acc) do
+  defp do_fetch_for_address(address_id, to_block, from_block, limit, sum_mode, sort_direction, options, acc) do
     internal_transactions =
       address_id
-      |> get_block_numbers_for_address(to_block, from_block, limit, sum_mode, sort_direction)
+      |> get_block_numbers_for_address(to_block, from_block, limit, sum_mode, sort_direction, options)
       |> fetch_block_internal_transactions()
 
     result = Enum.concat(internal_transactions, acc)
@@ -335,6 +336,7 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
             limit - count,
             sum_mode,
             sort_direction,
+            options,
             result
           )
 
@@ -346,6 +348,7 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
             limit - count,
             sum_mode,
             sort_direction,
+            options,
             result
           )
       end
@@ -461,9 +464,9 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
 
   defp fetch_enough(_start_number, _end_number, _count, _options, acc), do: acc
 
-  defp get_block_numbers_for_address(nil, _end_block, _start_block, _limit, _sum_mode, _order), do: []
+  defp get_block_numbers_for_address(nil, _end_block, _start_block, _limit, _sum_mode, _order, _options), do: []
 
-  defp get_block_numbers_for_address(address_id, end_block, start_block, limit, sum_mode, order) do
+  defp get_block_numbers_for_address(address_id, end_block, start_block, limit, sum_mode, order, options) do
     ranked_query =
       InternalTransactionsAddressPlaceholder
       |> where([q], q.address_id == ^address_id)
@@ -547,7 +550,7 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
         select: c.block_number
       )
 
-    Repo.all(final_query)
+    Chain.select_repo(options).all(final_query)
   end
 
   defp filter_by_address(internal_transactions, address_hash, direction) do
