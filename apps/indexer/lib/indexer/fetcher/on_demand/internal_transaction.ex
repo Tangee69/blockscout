@@ -150,7 +150,7 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
 
         :ignore ->
           [transaction.block_number]
-          |> fetch_block_internal_transactions()
+          |> fetch_block_internal_transactions(options)
           |> Enum.map(&serialize/1)
           |> Enum.filter(&(&1.block_number == transaction.block_number and &1.transaction_index == transaction.index))
           |> different_from_parent_transaction()
@@ -208,7 +208,7 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
       unlimited? = Keyword.get(options, :unlimited)
 
       [block.number]
-      |> fetch_block_internal_transactions()
+      |> fetch_block_internal_transactions(options)
       |> Enum.map(&serialize/1)
       |> different_from_parent_transaction()
       |> filter_by_type(type_filter, call_type_filter)
@@ -316,7 +316,7 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
     internal_transactions =
       address_id
       |> get_block_numbers_for_address(to_block, from_block, limit, sum_mode, sort_direction, options)
-      |> fetch_block_internal_transactions()
+      |> fetch_block_internal_transactions(options)
 
     result = Enum.concat(internal_transactions, acc)
 
@@ -571,9 +571,9 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
     end)
   end
 
-  defp fetch_block_internal_transactions([]), do: []
+  defp fetch_block_internal_transactions([], _options), do: []
 
-  defp fetch_block_internal_transactions(block_numbers) do
+  defp fetch_block_internal_transactions(block_numbers, options) do
     if internal_transactions_fetching_disabled?() do
       []
     else
@@ -621,10 +621,10 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
   # Collects traceable transactions of all the blocks with a single DB query,
   # preserving the order of `block_numbers` (and transaction index order within
   # a block).
-  defp transactions_to_trace(block_numbers) do
+  defp transactions_to_trace(block_numbers, options) do
     transactions_by_block_number =
       block_numbers
-      |> Transaction.get_transactions_of_block_numbers()
+      |> Transaction.get_transactions_of_block_numbers(options)
       |> Transaction.filter_non_traceable_transactions()
       |> Enum.group_by(& &1.block_number)
 

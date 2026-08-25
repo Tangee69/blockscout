@@ -3094,10 +3094,10 @@ defmodule Explorer.Chain.Transaction do
   @doc """
   Finds all transactions of a certain block number
   """
-  def get_transactions_of_block_number(block_number) do
+  def get_transactions_of_block_number(block_number, options \\ []) do
     block_number
     |> transactions_with_block_number()
-    |> Repo.all()
+    |> Chain.select_repo(options).all()
   end
 
   @doc """
