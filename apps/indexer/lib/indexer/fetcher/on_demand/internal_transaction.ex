@@ -403,12 +403,13 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
       from_block: Map.get(options, :startblock),
       to_block: Map.get(options, :endblock),
       sort_direction: Map.get(options, :order_by_direction),
-      index_internal_transaction_desc_order: Map.get(options, :order_by_direction) != :asc
+      index_internal_transaction_desc_order: Map.get(options, :order_by_direction) != :asc,
+      api?: true
     ]
 
     address_hash
     |> fetch_by_address(prepared_options)
-    |> Repo.preload(:block)
+    |> Chain.select_repo(prepared_options).preload(:block)
     |> Enum.map(&etherscan_serialize/1)
   end
 
@@ -430,13 +431,14 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
       from_block: Map.get(options, :startblock),
       to_block: Map.get(options, :endblock),
       sort_direction: Map.get(options, :order_by_direction),
-      index_internal_transaction_desc_order: Map.get(options, :order_by_direction) != :asc
+      index_internal_transaction_desc_order: Map.get(options, :order_by_direction) != :asc,
+      api?: true
     ]
 
     prepared_options
     |> fetch_latest()
     |> different_from_parent_transaction()
-    |> Repo.preload(:block)
+    |> Chain.select_repo(prepared_options).preload(:block)
     |> Enum.map(&etherscan_serialize/1)
   end
 
