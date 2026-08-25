@@ -847,7 +847,7 @@ defmodule Explorer.Chain.Address do
   ## Parameters
 
     - `addresses`: An `Explorer.Chain.Address.t/0`, a list of addresses, `[]`, or `nil`
-    - `repo`: The repo module used to execute the query. Defaults to `Explorer.Repo`
+    - `options`: A keyword list of options used to select the repo (for example, `api?: true`)
 
   ## Returns
 
