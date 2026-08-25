@@ -16,7 +16,7 @@ defmodule BlockScoutWeb.GraphQL.Resolvers.InternalTransaction do
         if InternalTransaction.present_in_db?(transaction.block_number) do
           GraphQL.get_internal_transaction(args)
         else
-          options = [paging_options: %PagingOptions{page_size: index + 1}]
+          options = [paging_options: %PagingOptions{page_size: index + 1}, api?: true]
 
           transaction
           |> InternalTransactionOnDemand.fetch_by_transaction(options)

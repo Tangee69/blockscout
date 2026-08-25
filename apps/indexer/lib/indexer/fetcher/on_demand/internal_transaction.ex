@@ -12,7 +12,6 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
   alias Explorer.{Chain, Etherscan, PagingOptions}
   alias Explorer.Chain.{Block, BlockNumberHelper, Hash, InternalTransaction, Transaction}
   alias Explorer.Chain.Cache.BlockNumber
-  alias Explorer.Repo
   alias Explorer.Utility.{AddressIdToAddressHash, InternalTransactionsAddressPlaceholder}
   alias Indexer.Fetcher.InternalTransaction, as: InternalTransactionFetcher
 
@@ -141,11 +140,11 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
           |> Enum.map(&serialize/1)
           |> different_from_parent_transaction()
           |> Enum.sort_by(& &1.index)
-          |> join_associations(necessity_by_association)
+          |> join_associations(necessity_by_association, options)
           |> page_internal_transaction(paging_options)
           |> Enum.take(paging_options.page_size)
-          |> Repo.preload(:block)
-          |> InternalTransaction.preload_error()
+          |> Chain.select_repo(options).preload(:block)
+          |> InternalTransaction.preload_error(options)
           |> InternalTransaction.preload_transaction()
           |> InternalTransaction.preload_addresses(options)
 
@@ -156,11 +155,11 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
           |> Enum.filter(&(&1.block_number == transaction.block_number and &1.transaction_index == transaction.index))
           |> different_from_parent_transaction()
           |> Enum.sort_by(& &1.index)
-          |> join_associations(necessity_by_association)
+          |> join_associations(necessity_by_association, options)
           |> page_internal_transaction(paging_options)
           |> Enum.take(paging_options.page_size)
-          |> Repo.preload(:block)
-          |> InternalTransaction.preload_error()
+          |> Chain.select_repo(options).preload(:block)
+          |> InternalTransaction.preload_error(options)
           |> InternalTransaction.preload_transaction()
           |> InternalTransaction.preload_addresses(options)
 
@@ -217,8 +216,8 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
       |> page_block_internal_transaction(paging_options)
       |> Enum.sort_by(&{&1.transaction_index, &1.index})
       |> then(&if unlimited?, do: &1, else: Enum.take(&1, paging_options.page_size))
-      |> join_associations(necessity_by_association)
-      |> InternalTransaction.preload_error()
+      |> join_associations(necessity_by_association, options)
+      |> InternalTransaction.preload_error(options)
       |> InternalTransaction.preload_transaction()
     end
   end
@@ -300,7 +299,7 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
       })
       |> Enum.sort_by(&{&1.block_number, &1.transaction_index, &1.index}, sort_func)
       |> Enum.take(paging_options.page_size)
-      |> join_associations(necessity_by_association)
+      |> join_associations(necessity_by_association, options)
       |> Chain.select_repo(options).preload(:block)
       |> InternalTransaction.preload_error(options)
       |> InternalTransaction.preload_transaction()
@@ -372,7 +371,7 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
     options = Map.merge(Etherscan.default_options(), raw_options)
 
     transaction
-    |> fetch_by_transaction(paging_options: %PagingOptions{page_size: options.page_size})
+    |> fetch_by_transaction(paging_options: %PagingOptions{page_size: options.page_size}, api?: true)
     |> Enum.map(&etherscan_serialize/1)
   end
 
@@ -765,22 +764,22 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
     Stream.filter(internal_transactions, &(&1.call_type in call_types))
   end
 
-  defp join_associations(records, necessity_by_association)
+  defp join_associations(records, necessity_by_association, options)
        when is_list(records) and is_map(necessity_by_association) do
     Enum.reduce(necessity_by_association, records, fn {association, necessity}, acc ->
-      join_association(acc, association, necessity)
+      join_association(acc, association, necessity, options)
     end)
   end
 
-  defp join_association(records, [{association, nested_preload}], :optional)
+  defp join_association(records, [{association, nested_preload}], :optional, options)
        when is_atom(association) do
-    Repo.preload(records, [{association, nested_preload}])
+    Chain.select_repo(options).preload(records, [{association, nested_preload}])
   end
 
-  defp join_association(records, [{association, nested_preload}], :required)
+  defp join_association(records, [{association, nested_preload}], :required, options)
        when is_atom(association) do
     records
-    |> Repo.preload([{association, nested_preload}])
+    |> Chain.select_repo(options).preload([{association, nested_preload}])
     |> Enum.filter(fn struct ->
       case Map.fetch(struct, association) do
         {:ok, value} -> not is_nil(value)
@@ -789,13 +788,13 @@ defmodule Indexer.Fetcher.OnDemand.InternalTransaction do
     end)
   end
 
-  defp join_association(records, association, :optional) do
-    Repo.preload(records, association)
+  defp join_association(records, association, :optional, options) do
+    Chain.select_repo(options).preload(records, association)
   end
 
-  defp join_association(records, association, :required) do
+  defp join_association(records, association, :required, options) do
     records
-    |> Repo.preload(association)
+    |> Chain.select_repo(options).preload(association)
     |> Enum.filter(fn struct ->
       case Map.fetch(struct, association) do
         {:ok, value} ->
